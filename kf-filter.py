@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 class KalmanFilter:
     def __init__(self, initial_uncertainty, A, B, C, measurement_noise_covar, process_noise_covar, initial_state, u, measurements, iterations):
@@ -12,7 +13,19 @@ class KalmanFilter:
         self.u = u
         self.measurements = measurements
         self.iterations = iterations
+        self.x_pred_history = np.array([])
+        self.x_pred_history = np.append(self.x_pred_history, initial_state[0,0])
 
+    def graph_states(self, measured, predicted, samples=150):
+
+        plt.plot(range(samples), measured[0:samples], label='Measured', color='red', linestyle='dotted')
+        plt.plot(range(samples), predicted[0:samples], label='Predicted', color='blue')
+        plt.xlabel('Time Step')
+        plt.ylabel('Position')
+        plt.title('Kalman Filter: Measured vs Applied Filter Positions')
+        plt.legend()
+        plt.grid()
+        plt.show()
         
     def filter(self, output_file : str):
         x_old = self.initial_state.T
@@ -56,9 +69,12 @@ class KalmanFilter:
             x_old = xhat_new
             P_old = P_new
 
+            self.x_pred_history = np.append(self.x_pred_history, xhat_new[0,0])
+
             with open(output_file, "a") as file:
                 file.write(f"{k},{self.measurements[k]},{xhat_new[0,0]:.3f},{P_new[0,0]:.3f}\n")
 
+        self.graph_states(self.measurements, self.x_pred_history, 100)
     
 # Example usage
 if __name__ == "__main__":
@@ -71,11 +87,12 @@ if __name__ == "__main__":
     C = np.array([[1, 0]])
     
     pos_noise_std = 10
-    in_noise_std = 0.2
+    accel_value = 1
+    accel_noise_std = 0.2
 
-    position_noise_var = ((dt**2)/2)**2*in_noise_std**2
-    velocity_noise_var = dt**2*in_noise_std**2
-    pos_vel_covar = ((dt**2)/2)*in_noise_std * dt*in_noise_std
+    position_noise_var = ((dt**2)/2)**2*accel_noise_std**2
+    velocity_noise_var = dt**2*accel_noise_std**2
+    pos_vel_covar = ((dt**2)/2)*accel_noise_std * dt*pos_noise_std
 
     # [[p^2 pv] ; [vp v^2]]
     process_noise_covar = np.array([[position_noise_var, pos_vel_covar], [pos_vel_covar, velocity_noise_var]])
