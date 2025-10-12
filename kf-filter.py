@@ -18,16 +18,26 @@ class KalmanFilter:
 
     def graph_states(self, measured, predicted, samples=150):
 
+        sma = self.simple_moving_average(measured, window_size=5)
         plt.plot(range(samples), measured[0:samples], label='Measured', color='red', linestyle='dotted')
-        plt.plot(range(samples), predicted[0:samples], label='Predicted', color='blue')
-        plt.xlabel('Time Step')
-        plt.ylabel('Position')
-        plt.title('Kalman Filter: Measured vs Applied Filter Positions')
+        plt.plot(range(samples), predicted[0:samples], label='Applied KF', color='blue')
+        plt.plot(range(4,samples), sma[:samples - 4], label='Simple Moving Average', 
+        color='green', linestyle='dashdot')
+        plt.xlabel('Sample Number')
+        plt.ylabel('Position (m)')
         plt.legend()
         plt.grid()
         plt.show()
-        
-    def filter(self, output_file : str):
+
+    def simple_moving_average(self, measurements, window_size=5):
+        if window_size < 1:
+            raise ValueError("Window size must be at least 1.")
+
+        csum = np.cumsum(np.insert(measurements, 0, 0))
+        mov_avg = (csum[window_size:] - csum[:-window_size]) / window_size
+        return mov_avg
+
+    def kf_filter(self, output_file : str, graph=True):
         x_old = self.initial_state.T
         P_old = self.initial_uncertainty
 
@@ -74,25 +84,26 @@ class KalmanFilter:
             with open(output_file, "a") as file:
                 file.write(f"{k},{self.measurements[k]},{xhat_new[0,0]:.3f},{P_new[0,0]:.3f}\n")
 
-        self.graph_states(self.measurements, self.x_pred_history, 100)
-    
-# Example usage
+        if graph:
+            self.graph_states(self.measurements, self.x_pred_history)
+
 if __name__ == "__main__":
     np.set_printoptions(suppress=True, precision=6)
     measurements = np.loadtxt('position-data.txt')
 
-    dt = 0.1
+    f = 10
+    dt = 1/f
     A = np.array([[1, dt], [0, 1]])
     B = np.array([[0.5 * dt**2], [dt]])
     C = np.array([[1, 0]])
     
     pos_noise_std = 10
-    accel_value = 1
     accel_noise_std = 0.2
+    accel_value = 1
 
     position_noise_var = ((dt**2)/2)**2*accel_noise_std**2
     velocity_noise_var = dt**2*accel_noise_std**2
-    pos_vel_covar = ((dt**2)/2)*accel_noise_std * dt*pos_noise_std
+    pos_vel_covar = ((dt**2)/2)*accel_noise_std * dt*accel_noise_std
 
     # [[p^2 pv] ; [vp v^2]]
     process_noise_covar = np.array([[position_noise_var, pos_vel_covar], [pos_vel_covar, velocity_noise_var]])
@@ -103,9 +114,13 @@ if __name__ == "__main__":
 
     iterations = len(measurements)
 
-    u = 1 * np.ones_like(measurements) # constant acceleration 1m/s^2
+    u = accel_value * np.ones_like(measurements) # constant acceleration 1m/s^2
+    
+    print("process noise covariance:\n", process_noise_covar)
+    print("measurement noise covariance:\n", measurement_noise_covar)
 
     kf = KalmanFilter(initial_uncertainty, A, B, C, measurement_noise_covar, process_noise_covar, initial_state, u, measurements, iterations)
 
-    kf.filter("estimated-positions.txt")
+
+    kf.kf_filter("estimated-positions.txt", graph=True)
     
